@@ -27,3 +27,12 @@ test('账号资料优先显示贴吧昵称', async () => {
   const adapter = new TiebaAdapter({ cookie: 'BDUSS=x', retries: 0, fetchImpl: async () => responses.shift() })
   assert.deepEqual(await adapter.getAccountProfile(), { nickname: '贴吧昵称', uid: '123' })
 })
+
+test('认证结果会通知凭证存储并附带清理状态', async () => {
+  const adapter = new TiebaAdapter({
+    cookie: 'BDUSS=expired', retries: 0,
+    fetchImpl: async () => new Response(JSON.stringify({ is_login: 0 }), { headers: { 'content-type': 'application/json' } }),
+    onAuthResult: valid => ({ cleared: !valid, source: 'encrypted_file' })
+  })
+  await assert.rejects(adapter.getTbs(), error => error.code === 'AUTH_EXPIRED' && error.cleared === true)
+})

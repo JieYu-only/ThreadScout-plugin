@@ -21,3 +21,29 @@ test('拒绝缺少 BDUSS 的凭证', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'threadscout-auth-'))
   try { assert.throws(() => new AuthStore(root).setCookie('main', 'STOKEN=only')) } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+test('连续两次认证失效后清理加密 Cookie', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'threadscout-auth-'))
+  try {
+    const store = new AuthStore(root)
+    const account = { id: 'main', cookie_env: 'THREADSCOUT_TEST_UNUSED' }
+    store.setCookie('main', 'BDUSS=expired')
+    assert.deepEqual(store.recordValidation(account, false).cleared, false)
+    assert.equal(store.status(account).bound, true)
+    assert.deepEqual(store.recordValidation(account, false).cleared, true)
+    assert.equal(store.status(account).bound, false)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('认证恢复成功会重置失效计数', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'threadscout-auth-'))
+  try {
+    const store = new AuthStore(root)
+    const account = { id: 'main', cookie_env: 'THREADSCOUT_TEST_UNUSED' }
+    store.setCookie('main', 'BDUSS=valid')
+    store.recordValidation(account, false)
+    store.recordValidation(account, true)
+    assert.equal(store.recordValidation(account, false).cleared, false)
+    assert.equal(store.status(account).bound, true)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})

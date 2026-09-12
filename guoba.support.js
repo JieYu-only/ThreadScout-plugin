@@ -47,6 +47,8 @@ export function supportGuoba() {
         { field: 'group_value', label: '群号/资源内容', component: 'Input', required: true, componentProps: { placeholder: '填写实际群号' } },
         { field: 'templates', label: '回复模板', component: 'InputTextArea', bottomHelpMessage: '每行一条；使用 {{resource:tarkov_main}} 引用上方群号', componentProps: { rows: 6 } },
         { component: 'Divider', label: '贴吧账号' },
+        { field: 'accounts_text', label: '账号清单', component: 'InputTextArea', bottomHelpMessage: '每行：账号标识 | 显示名称 | true/false | Cookie环境变量。被任务引用的账号不能直接删除。', componentProps: { rows: 5, placeholder: 'main_account | 主账号 | true | THREADSCOUT_TIEBA_COOKIE_MAIN' } },
+        { field: 'account_id', label: '当前操作账号', component: 'Input', required: true, bottomHelpMessage: '下面的绑定状态、更新 Cookie 和删除 Cookie 均针对该账号标识' },
         { field: 'account_status', label: '绑定状态', component: 'Input', componentProps: { disabled: true } },
         { field: 'account_cookie', label: '更新 Cookie', component: 'Input', bottomHelpMessage: '只写不回显；留空不会覆盖。必须包含 BDUSS，保存后加密存放。', componentProps: { type: 'password', placeholder: '完整 Cookie 字符串' } },
         { field: 'remove_cookie', label: '删除已保存 Cookie', component: 'Switch' },
@@ -79,7 +81,9 @@ export function supportGuoba() {
           max_delay_minutes: config.queue.max_delay_minutes,
           group_value: config.reply.resources.tarkov_main?.value ?? '',
           templates: pool.map(item => item.text).join('\n'),
-          account_status: auth.bound ? `已绑定（${auth.source}）` : '未绑定',
+          accounts_text: config.accounts.map(item => `${item.id} | ${item.name} | ${item.enabled} | ${item.cookie_env ?? ''}`).join('\n'),
+          account_id: account.id,
+          account_status: `${account.name}：${auth.bound ? `已绑定（${auth.source}）` : '未绑定'}`,
           account_cookie: '',
           remove_cookie: false,
           timeout_seconds: config.network.timeout_seconds,
@@ -91,8 +95,22 @@ export function supportGuoba() {
       setConfigData(data, { Result }) {
         try {
           const config = structuredClone(configStore.load())
+          const previousAccountIds = new Set(config.accounts.map(item => item.id))
           const task = firstTask(config)
-          const account = firstAccount(config)
+          if (data.accounts_text != null) {
+            const accounts = String(data.accounts_text).split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+              const [id = '', name = '', enabled = 'false', cookieEnv = ''] = line.split('|').map(value => value.trim())
+              if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error(`账号标识无效：${id || '空'}`)
+              if (!name || name.length > 30) throw new Error(`账号 ${id} 的显示名称无效`)
+              if (!['true', 'false'].includes(enabled.toLowerCase())) throw new Error(`账号 ${id} 的启用状态必须是 true 或 false`)
+              return { id, name, enabled: enabled.toLowerCase() === 'true', cookie_env: cookieEnv }
+            })
+            if (!accounts.length) throw new Error('必须至少保留一个账号')
+            config.accounts = accounts
+          }
+          const accountId = String(data.account_id ?? firstAccount(config).id).trim()
+          const account = config.accounts.find(item => item.id === accountId)
+          if (!account) throw new Error(`找不到当前操作账号 ${accountId}`)
           if (data.enabled != null) config.enabled = Boolean(data.enabled)
           if (data.mode != null) config.mode = data.mode
           if (data.task_enabled != null) task.enabled = Boolean(data.task_enabled)
@@ -110,6 +128,7 @@ export function supportGuoba() {
           for (const key of ['timeout_seconds', 'retries', 'retry_delay_seconds']) if (data[key] != null) config.network[key] = Number(data[key])
           if (data.proxy_url != null) config.network.proxy_url = String(data.proxy_url).trim()
           configStore.save(config)
+          for (const id of previousAccountIds) if (!config.accounts.some(item => item.id === id)) authStore.deleteCookie(id)
           if (data.remove_cookie) authStore.deleteCookie(account.id)
           if (String(data.account_cookie ?? '').trim()) authStore.setCookie(account.id, data.account_cookie)
           return Result.ok({}, 'ThreadScout 配置已保存；复杂组合规则可继续在 config.yaml 中维护')
