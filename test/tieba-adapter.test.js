@@ -37,6 +37,16 @@ test('网页正文被安全验证拦截时改用客户端接口', async () => {
   assert.deepEqual(await adapter.getThread({ platform: 'tieba', id: '123', forum: '测试吧', title: '' }), { platform: 'tieba', id: '123', forum: '测试吧', title: '主题', body: '正文内容', rawHtml: null })
 })
 
+test('网页返回 200 但没有正文时仍改用客户端接口', async () => {
+  const responses = [
+    new Response('<html><title>替代页面</title></html>', { status: 200 }),
+    new Response(JSON.stringify({ error_code: 0, thread: { title: '主题' }, post_list: [{ floor: 1, content: [{ type: 0, text: '备用正文' }] }] }), { headers: { 'content-type': 'application/json' } })
+  ]
+  const adapter = new TiebaAdapter({ retries: 0, fetchImpl: async () => responses.shift() })
+  const thread = await adapter.getThread({ platform: 'tieba', id: '123', forum: '测试吧', title: '' })
+  assert.equal(thread.body, '备用正文')
+})
+
 test('账号资料优先显示贴吧昵称', async () => {
   const responses = [
     new Response(JSON.stringify({ is_login: 1, tbs: 'ok' }), { headers: { 'content-type': 'application/json' } }),
@@ -44,6 +54,17 @@ test('账号资料优先显示贴吧昵称', async () => {
   ]
   const adapter = new TiebaAdapter({ cookie: 'BDUSS=x', retries: 0, fetchImpl: async () => responses.shift() })
   assert.deepEqual(await adapter.getAccountProfile(), { nickname: '贴吧昵称', uid: '123' })
+})
+
+test('tbs 登录标志不可靠时用账号资料交叉确认', async () => {
+  let validation = null
+  const responses = [
+    new Response(JSON.stringify({ is_login: 0, tbs: 'anonymous-tbs' }), { headers: { 'content-type': 'application/json' } }),
+    new Response(JSON.stringify({ data: { is_login: true, user_name_show: '已登录昵称', user_id: 456 } }), { headers: { 'content-type': 'application/json' } })
+  ]
+  const adapter = new TiebaAdapter({ cookie: 'BDUSS=valid', retries: 0, fetchImpl: async () => responses.shift(), onAuthResult: valid => { validation = valid } })
+  assert.deepEqual(await adapter.getAccountProfile(), { nickname: '已登录昵称', uid: '456' })
+  assert.equal(validation, true)
 })
 
 test('认证结果会通知凭证存储并附带清理状态', async () => {
@@ -67,5 +88,20 @@ test('安全验证拦截时不把 Cookie 误判为过期', async () => {
     onAuthResult: () => { validationCalls++; return { cleared: true } }
   })
   await assert.rejects(adapter.getTbs(), error => error.code === 'ACCESS_DENIED' && /不会清理 Cookie/.test(error.message))
+  assert.equal(validationCalls, 0)
+})
+
+test('只读账号查询不累计认证失败或清理 Cookie', async () => {
+  let validationCalls = 0
+  const responses = [
+    new Response(JSON.stringify({ is_login: 0 }), { headers: { 'content-type': 'application/json' } }),
+    new Response(JSON.stringify({ data: { is_login: false } }), { headers: { 'content-type': 'application/json' } }),
+    new Response('<html>normal page</html>', { headers: { 'content-type': 'text/html' } })
+  ]
+  const adapter = new TiebaAdapter({
+    cookie: 'BDUSS=possibly-valid', retries: 0,
+    fetchImpl: async () => responses.shift(), onAuthResult: () => { validationCalls++ }
+  })
+  await assert.rejects(adapter.getAccountProfile({ recordValidation: false }), error => error.code === 'AUTH_UNCONFIRMED' && /Cookie 仍保留/.test(error.message))
   assert.equal(validationCalls, 0)
 })

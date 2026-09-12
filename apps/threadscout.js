@@ -115,7 +115,7 @@ export class ThreadScout extends BasePlugin {
       if (!status.bound) { lines.push(`${account.name}（${account.id}）：${enabled} / 未绑定`); continue }
       if (!account.enabled) { lines.push(`${account.name}（${account.id}）：已停用 / 已绑定 / ${status.source}`); continue }
       try {
-        const profile = await adapterFactory(account.id).getAccountProfile()
+        const profile = await adapterFactory(account.id).getAccountProfile({ recordValidation: false })
         lines.push(`${profile.nickname}${profile.uid ? `（UID ${profile.uid}）` : ''}\n配置标识：${account.id} / ${enabled} / ${status.source}`)
       } catch (error) {
         const cleanup = error.cleared ? '\n已连续两次确认失效，插件保存的旧 Cookie 已自动清理。' : error.source === 'environment' ? '\nCookie 来自环境变量，插件无法自动删除，请修改服务器环境变量。' : ''
