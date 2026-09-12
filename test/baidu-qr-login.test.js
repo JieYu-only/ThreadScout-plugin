@@ -1,10 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { BaiduQrLogin, parseJsonp } from '../lib/baidu-qr-login.js'
+import { BaiduQrLogin, createLoginSignature, parseJsonp } from '../lib/baidu-qr-login.js'
 
 test('parseJsonp accepts JSON and callback wrapped JSON', () => {
   assert.equal(parseJsonp('{"errno":1}').errno, 1)
   assert.equal(parseJsonp('callback({"errno":0,"channel_v":"{}"})').errno, 0)
+})
+
+test('登录确认参数生成稳定的双层 Base64 AES 签名', () => {
+  const signature = createLoginSignature({ alg: 'v3', apiver: 'v3', bduss: 'temporary' })
+  assert.match(signature, /^[A-Za-z0-9+/]+=*$/)
+  assert.equal(signature, createLoginSignature({ alg: 'v3', apiver: 'v3', bduss: 'temporary' }))
+  assert.notEqual(signature, createLoginSignature({ alg: 'v3', apiver: 'v3', bduss: 'changed' }))
 })
 
 test('QR login creates image and maps polling states', async () => {

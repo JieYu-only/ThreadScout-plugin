@@ -195,9 +195,12 @@ export class ThreadScout extends BasePlugin {
       const result = await updater.update({ force })
       if (result.status === 'locked') return this.send('已有更新任务正在执行，请稍后再试。')
       if (result.status === 'dirty') return this.send('检测到插件代码存在本地修改，普通更新已停止。\n请先提交修改，或使用 #巡帖强制更新；强制更新会先把差异备份到 data/update-backups。')
-      if (result.status === 'up-to-date') return this.send(`ThreadScout 已是最新版本。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)}`)
+      if (result.status === 'up-to-date') return this.send(`ThreadScout 已是最新版本。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)}\n依赖检查已完成；如刚才更新曾失败，请发送 #重启。`)
       const backup = result.backup ? `\n本地差异备份：${path.relative(root, result.backup)}` : ''
-      return this.send(`ThreadScout 更新完成。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)} → ${result.after.slice(0, 7)}${backup}\n依赖已安装，请执行 pnpm restart 或重启云崽使新代码生效。`)
+      const canRestart = typeof globalThis.Bot?.restart === 'function'
+      await this.send(`ThreadScout 更新完成。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)} → ${result.after.slice(0, 7)}${backup}\n依赖已安装。${canRestart ? '云崽将在 3 秒后自动重启。' : '当前环境不支持自动重启，请发送 #重启。'}`)
+      if (canRestart) setTimeout(() => Promise.resolve(globalThis.Bot.restart()).catch(error => (globalThis.logger ?? console).error('[ThreadScout] 自动重启失败', error)), 3000)
+      return true
     } catch (error) {
       ;(globalThis.logger ?? console).error('[ThreadScout] 更新失败', error)
       return this.send(`ThreadScout 更新失败：${error.stderr || error.message}`)
