@@ -5,6 +5,7 @@ import { AuthStore } from '../lib/auth-store.js'
 import { ThreadScoutDatabase } from '../lib/database.js'
 import { TiebaAdapter } from '../lib/tieba-adapter.js'
 import { ThreadScoutService } from '../lib/service.js'
+import { PluginUpdater } from '../lib/updater.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const configStore = new ConfigStore(root)
@@ -24,6 +25,7 @@ const adapterFactory = accountId => {
   })
 }
 const service = new ThreadScoutService({ configStore, database, adapterFactory, logger: globalThis.logger ?? console })
+const updater = new PluginUpdater({ pluginRoot: root, logger: globalThis.logger ?? console })
 
 const BasePlugin = globalThis.plugin ?? class {}
 
@@ -34,7 +36,8 @@ export class ThreadScout extends BasePlugin {
       rule: [
         { reg: '^#巡[帖贴]帮助$', fnc: 'help' }, { reg: '^#巡帖状态$', fnc: 'status' }, { reg: '^#巡帖立即扫描$', fnc: 'scanNow', permission: 'master' },
         { reg: '^#巡帖模式\\s*(观察|自动|停止)$', fnc: 'setMode', permission: 'master' }, { reg: '^#巡帖重载配置$', fnc: 'reloadConfig', permission: 'master' },
-        { reg: '^#巡帖队列$', fnc: 'queue' }, { reg: '^#巡帖账号$', fnc: 'accounts', permission: 'master' }
+        { reg: '^#巡帖队列$', fnc: 'queue' }, { reg: '^#巡帖账号$', fnc: 'accounts', permission: 'master' },
+        { reg: '^#巡帖更新$', fnc: 'updatePlugin', permission: 'master' }, { reg: '^#巡帖强制更新$', fnc: 'forceUpdatePlugin', permission: 'master' }
       ],
       task: [
         { cron: '15 * * * * *', name: 'ThreadScout主题扫描', fnc: () => service.scanAll() },
@@ -44,7 +47,7 @@ export class ThreadScout extends BasePlugin {
   }
 
   async send(message) { return this.reply?.(message) }
-  helpText() { return '【ThreadScout 指令帮助】\n\n公开指令：\n#巡贴帮助 / #巡帖帮助\n查看本指令说明。\n\n#巡帖状态\n查看运行模式、账号、任务、待回复和今日成功数量。\n\n#巡帖队列\n查看当前待回复任务数量。\n\n主人指令：\n#巡帖账号\n查看账号是否已绑定；不会显示 Cookie 内容。\n\n#巡帖立即扫描\n跳过扫描间隔，立即扫描所有已启用任务。\n\n#巡帖重载配置\n校验并重新读取 config.yaml。\n\n#巡帖模式 观察 / 自动 / 停止\n切换插件运行模式。\n\n提示：贴吧、规则、模板、群号、网络和 Cookie 可在 Guoba-Plugin 的「ThreadScout 巡帖」页面管理。' }
+  helpText() { return '【ThreadScout 指令帮助】\n\n公开指令：\n#巡贴帮助 / #巡帖帮助\n查看本指令说明。\n\n#巡帖状态\n查看运行模式、账号、任务、待回复和今日成功数量。\n\n#巡帖队列\n查看当前待回复任务数量。\n\n主人指令：\n#巡帖账号\n查看账号是否已绑定；不会显示 Cookie 内容。\n\n#巡帖立即扫描\n跳过扫描间隔，立即扫描所有已启用任务。\n\n#巡帖重载配置\n校验并重新读取 config.yaml。\n\n#巡帖更新\n安全拉取更新并安装依赖。\n\n#巡帖强制更新\n备份本地代码差异后强制同步远端。\n\n#巡帖模式 观察 / 自动 / 停止\n切换插件运行模式。\n\n提示：贴吧、规则、模板、群号、网络和 Cookie 可在 Guoba-Plugin 的「ThreadScout 巡帖」页面管理。' }
   async help(e = this.e) {
     const current = configStore.value
     const stats = database.stats()
@@ -58,7 +61,9 @@ export class ThreadScout extends BasePlugin {
       { name: '#巡帖队列', desc: '查看当前待回复任务数量', access: '公开' },
       { name: '#巡帖账号', desc: '查看账号绑定状态，不显示 Cookie', access: '主人' },
       { name: '#巡帖立即扫描', desc: '跳过间隔，立即扫描启用的任务', access: '主人' },
-      { name: '#巡帖重载配置', desc: '校验并重新读取 config.yaml', access: '主人' }
+      { name: '#巡帖重载配置', desc: '校验并重新读取 config.yaml', access: '主人' },
+      { name: '#巡帖更新', desc: '安全拉取更新并安装依赖', access: '主人' },
+      { name: '#巡帖强制更新', desc: '备份本地差异后强制同步远端', access: '主人' }
     ]
     const modes = [
       { command: '#巡帖模式 观察', name: 'OBSERVE', desc: '只扫描、评分和记录，绝不回帖', tone: 'observe' },
@@ -101,4 +106,20 @@ export class ThreadScout extends BasePlugin {
     }
     return this.send(`【巡帖账号】\n${lines.join('\n\n')}\nCookie 不会在聊天中显示，请通过锅巴面板绑定。`)
   }
+  async runUpdate(force) {
+    await this.send(force ? '开始强制更新 ThreadScout，本地代码差异会先备份……' : '开始检查 ThreadScout 更新……')
+    try {
+      const result = await updater.update({ force })
+      if (result.status === 'locked') return this.send('已有更新任务正在执行，请稍后再试。')
+      if (result.status === 'dirty') return this.send('检测到插件代码存在本地修改，普通更新已停止。\n请先提交修改，或使用 #巡帖强制更新；强制更新会先把差异备份到 data/update-backups。')
+      if (result.status === 'up-to-date') return this.send(`ThreadScout 已是最新版本。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)}`)
+      const backup = result.backup ? `\n本地差异备份：${path.relative(root, result.backup)}` : ''
+      return this.send(`ThreadScout 更新完成。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)} → ${result.after.slice(0, 7)}${backup}\n依赖已安装，请执行 pnpm restart 或重启云崽使新代码生效。`)
+    } catch (error) {
+      ;(globalThis.logger ?? console).error('[ThreadScout] 更新失败', error)
+      return this.send(`ThreadScout 更新失败：${error.stderr || error.message}`)
+    }
+  }
+  async updatePlugin() { return this.runUpdate(false) }
+  async forceUpdatePlugin() { return this.runUpdate(true) }
 }
