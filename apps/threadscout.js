@@ -45,6 +45,7 @@ export class ThreadScout extends BasePlugin {
         { reg: '^#巡[帖贴]帮助$', fnc: 'help' }, { reg: '^#巡帖状态$', fnc: 'status' }, { reg: '^#巡帖立即扫描$', fnc: 'scanNow', permission: 'master' },
         { reg: '^#巡帖模式\\s*(观察|自动|停止)$', fnc: 'setMode', permission: 'master' }, { reg: '^#巡帖重载配置$', fnc: 'reloadConfig', permission: 'master' },
         { reg: '^#巡帖队列$', fnc: 'queue' }, { reg: '^#巡帖账号$', fnc: 'accounts', permission: 'master' },
+        { reg: '^#巡帖(?:账户|账号)管理$', fnc: 'accountManagement', permission: 'master' },
         { reg: '^#巡帖扫码登录(?:\\s+\\S+)?$', fnc: 'qrLogin', permission: 'master' },
         { reg: '^#巡帖添加账号\\s+\\S+\\s+.+$', fnc: 'addAccount', permission: 'master' },
         { reg: '^#巡帖(?:启用|停用|解绑|删除)账号\\s+\\S+$', fnc: 'manageAccount', permission: 'master' },
@@ -123,6 +124,9 @@ export class ThreadScout extends BasePlugin {
     }
     return this.send(`【巡帖账号】\n${lines.join('\n\n')}\nCookie 不会在聊天中显示，请通过锅巴面板绑定。`)
   }
+  async accountManagement() {
+    return this.send('【巡帖账户管理】\n\n以下修改指令仅限机器人主人私聊使用：\n\n#巡帖添加账号 <账号标识> <显示名称>\n添加一个默认停用、未绑定的新账号。\n\n#巡帖启用账号 <账号标识>\n#巡帖停用账号 <账号标识>\n切换账号启用状态；被启用任务引用的账号不能停用。\n\n#巡帖扫码登录 [账号标识]\n扫码登录并加密保存 Cookie；不填写标识时绑定当前主账号。\n\n#巡帖解绑账号 <账号标识>\n清除该账号由插件加密保存的 Cookie。\n\n#巡帖删除账号 <账号标识>\n删除未被任务引用的账号及其加密 Cookie。\n\n#巡帖任务账号 <任务标识> <账号标识>\n将任务切换到指定的已启用账号。\n\n#巡帖账号\n查看全部账号的启用、绑定和在线验证状态。\n\n账号标识仅支持字母、数字、下划线和短横线。')
+  }
   async qrLogin(e = this.e) {
     if (e?.isGroup || e?.message_type === 'group') { await this.send('为保护账号安全，请私聊机器人发送 #巡帖扫码登录。'); return true }
     const requestedId = String(e?.msg ?? '').trim().split(/\s+/)[1]
@@ -189,17 +193,30 @@ export class ThreadScout extends BasePlugin {
     const match = String(e.msg).match(/^#巡帖任务账号\s+(\S+)\s+(\S+)$/)
     try { const { task, account } = accountManager.assign(match[1], match[2]); return this.send(`任务 ${task.name}（${task.id}）已切换至账号 ${account.name}（${account.id}）。`) } catch (error) { return this.send(`切换任务账号失败：${error.message}`) }
   }
+  async sendUpdateLog(logs) {
+    if (!logs?.length) return
+    const title = `ThreadScout-plugin更新日志，共${logs.length}条`
+    const details = logs.join('\n\n')
+    const repository = '更多详细信息，请前往\nhttps://gitee.com/jieyu19960111/thread-scout-plugin 查看'
+    try {
+      const { default: common } = await import('../../../lib/common/common.js')
+      return this.send(await common.makeForwardMsg(this.e, [details, repository], title))
+    } catch (error) {
+      ;(globalThis.logger ?? console).warn('[ThreadScout] 合并转发更新日志失败，改用普通消息', error)
+      return this.send(`${title}\n\n${details}\n\n${repository}`)
+    }
+  }
   async runUpdate(force) {
-    await this.send(force ? '开始强制更新 ThreadScout，本地代码差异会先备份……' : '开始检查 ThreadScout 更新……')
+    await this.send(force ? '正在执行强制更新操作，请稍等' : '正在执行更新操作，请稍等')
     try {
       const result = await updater.update({ force })
       if (result.status === 'locked') return this.send('已有更新任务正在执行，请稍后再试。')
       if (result.status === 'dirty') return this.send('检测到插件代码存在本地修改，普通更新已停止。\n请先提交修改，或使用 #巡帖强制更新；强制更新会先把差异备份到 data/update-backups。')
-      if (result.status === 'up-to-date') return this.send(`ThreadScout 插件已是最新\n最后更新时间：${result.updatedAt || '未知'}\n当前版本：${result.before.slice(0, 7)}\n依赖检查已完成。`)
+      if (result.status === 'up-to-date') return this.send(`ThreadScout-plugin已经是最新版本\n最后更新时间：${result.updatedAt || '未知'}`)
       const backup = result.backup ? `\n本地差异备份：${path.relative(root, result.backup)}` : ''
-      await this.send(`ThreadScout 插件更新成功\n最后更新时间：${result.updatedAt || '未知'}\n版本：${result.before.slice(0, 7)} → ${result.after.slice(0, 7)}${backup}`)
-      if (result.logs?.length) await this.send(`ThreadScout 更新日志（${result.logs.length} 条）：\n${result.logs.join('\n')}`)
-      await this.send('依赖检查已完成，2 秒后自动重启生效……')
+      await this.send(`ThreadScout-plugin\n最后更新时间：${result.updatedAt || '未知'}${backup}`)
+      await this.sendUpdateLog(result.logs)
+      await this.send('更新完毕，正在重启机器人以应用更新')
       const event = this.e
       setTimeout(async () => {
         try {
