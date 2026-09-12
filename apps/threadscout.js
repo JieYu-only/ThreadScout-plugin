@@ -87,5 +87,18 @@ export class ThreadScout extends BasePlugin {
   async scanNow() { const result = await service.scanAll({ force: true }); return this.send(`扫描完成：检查 ${result.scanned ?? 0}，自动命中 ${result.auto ?? 0}，候选 ${result.candidate ?? 0}，入队 ${result.queued ?? 0}${result.errors?.length ? `\n异常：${result.errors.join('；')}` : ''}`) }
   async setMode() { const map = { 观察: 'observe', 自动: 'auto', 停止: 'stopped' }; const mode = map[this.e.msg.match(/观察|自动|停止/)[0]]; const next = structuredClone(configStore.value); next.mode = mode; configStore.save(next); return this.send(`巡帖模式已切换为：${mode}`) }
   async reloadConfig() { try { configStore.reload(); return this.send('ThreadScout 配置已校验并重载。') } catch (error) { return this.send(`配置重载失败，继续使用原配置：${error.message}`) } }
-  async accounts() { const lines = configStore.value.accounts.map(account => { const status = authStore.status(account); return `${account.name}（${account.id}）：${status.bound ? `已绑定 / ${status.source}` : '未绑定'}` }); return this.send(`【巡帖账号】\n${lines.join('\n')}\nCookie 不会在聊天中显示，请通过锅巴面板绑定。`) }
+  async accounts() {
+    const lines = []
+    for (const account of configStore.value.accounts) {
+      const status = authStore.status(account)
+      if (!status.bound) { lines.push(`${account.name}（${account.id}）：未绑定`); continue }
+      try {
+        const profile = await adapterFactory(account.id).getAccountProfile()
+        lines.push(`${profile.nickname}${profile.uid ? `（UID ${profile.uid}）` : ''}\n配置标识：${account.id} / ${status.source}`)
+      } catch (error) {
+        lines.push(`${account.name}（${account.id}）：已绑定但验证失败\n${error.code ?? 'ERROR'}：${error.message}`)
+      }
+    }
+    return this.send(`【巡帖账号】\n${lines.join('\n\n')}\nCookie 不会在聊天中显示，请通过锅巴面板绑定。`)
+  }
 }
