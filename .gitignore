@@ -1,0 +1,10 @@
+node_modules/
+.npm-cache/
+data/*
+!data/.gitkeep
+config/config.yaml
+config/*.backup.yaml
+*.log
+.env
+data/auth.key
+data/auth.enc.json

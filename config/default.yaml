@@ -1,0 +1,120 @@
+version: 1
+enabled: true
+mode: observe
+
+database:
+  path: data/threadscout.db
+
+network:
+  timeout_seconds: 15
+  retries: 2
+  retry_delay_seconds: 2
+  proxy_url: ""
+
+accounts:
+  - id: main_account
+    name: 主账号
+    enabled: true
+    cookie_env: THREADSCOUT_TIEBA_COOKIE_MAIN
+
+tasks:
+  - id: tarkov_team
+    name: 逃离塔科夫找队友
+    enabled: true
+    platform: tieba
+    forum: 逃离塔科夫
+    account_id: main_account
+    reply_pool: tarkov_team
+    scan:
+      interval_minutes: 10
+      latest_threads: 50
+      pages: 2
+      max_age_minutes: 120
+
+matching:
+  candidate_score: 5
+  auto_reply_score: 8
+  strong:
+    - text: 找队友
+      title: 5
+      body: 3
+    - text: 求队友
+      title: 5
+      body: 3
+    - text: 组队来人
+      title: 5
+      body: 3
+    - text: 有没有一起玩的
+      title: 5
+      body: 3
+  auxiliary:
+    - text: 萌新
+      title: 2
+      body: 1
+    - text: 新手
+      title: 2
+      body: 1
+    - text: 今晚
+      title: 2
+      body: 1
+    - text: 一起玩
+      title: 2
+      body: 1
+  combinations:
+    - id: newbie_team
+      bonus: 3
+      all:
+        - [萌新, 新手]
+        - [组队, 一起玩, 求带]
+    - id: evening_team
+      bonus: 2
+      all:
+        - [晚上, 今晚]
+        - [一起玩, 组队, 来人]
+  negative:
+    - text: 吐槽
+      score: -5
+    - text: 坑队友
+      score: -5
+  exclude:
+    - 已经找到
+    - 找到了
+    - 人满了
+    - 不找了
+    - 举报
+
+queue:
+  min_delay_minutes: 3
+  max_delay_minutes: 15
+  max_pending: 20
+  max_overdue_minutes: 30
+  retry_network_errors: 2
+
+limits:
+  max_per_hour: 3
+  max_per_day: 15
+
+circuit_breaker:
+  consecutive_failures: 3
+  pause_minutes: 60
+
+reply:
+  avoid_recent_templates: 3
+  resources:
+    tarkov_main:
+      type: qq_group
+      value: "请填写群号"
+  pools:
+    tarkov_team:
+      - id: team_01
+        weight: 1
+        enabled: true
+        text: "如果还缺队友，可以来群里一起玩：{{resource:tarkov_main}}"
+      - id: team_02
+        weight: 1
+        enabled: true
+        text: "这边平时有人一起组队，群号：{{resource:tarkov_main}}"
+      - id: team_03
+        weight: 1
+        enabled: true
+        text: "还在找人的话欢迎来交流：{{resource:tarkov_main}}"
