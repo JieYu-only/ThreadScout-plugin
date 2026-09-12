@@ -50,7 +50,7 @@ export function supportGuoba() {
         { field: 'accounts_text', label: '账号清单', component: 'InputTextArea', bottomHelpMessage: '每行：账号标识 | 显示名称 | true/false | Cookie环境变量。被任务引用的账号不能直接删除。', componentProps: { rows: 5, placeholder: 'main_account | 主账号 | true | THREADSCOUT_TIEBA_COOKIE_MAIN' } },
         { field: 'account_id', label: '当前操作账号', component: 'Input', required: true, bottomHelpMessage: '下面的绑定状态、更新 Cookie 和删除 Cookie 均针对该账号标识' },
         { field: 'account_status', label: '绑定状态', component: 'Input', componentProps: { disabled: true } },
-        { field: 'account_cookie', label: '更新 Cookie', component: 'Input', bottomHelpMessage: '只写不回显；留空不会覆盖。必须包含 BDUSS，保存后加密存放。', componentProps: { type: 'password', placeholder: '完整 Cookie 字符串' } },
+        { field: 'account_cookie', label: '更新 Cookie', component: 'Input', bottomHelpMessage: '可直接粘贴浏览器复制的完整 Cookie；插件会自动解析、去重，只保留贴吧登录所需字段并加密保存。留空不会覆盖。', componentProps: { type: 'password', placeholder: '直接粘贴完整 Cookie' } },
         { field: 'remove_cookie', label: '删除已保存 Cookie', component: 'Switch' },
         { component: 'Divider', label: '网络容错' },
         { field: 'timeout_seconds', label: '请求超时（秒）', component: 'InputNumber', componentProps: { min: 3, max: 120 } },
@@ -130,8 +130,8 @@ export function supportGuoba() {
           configStore.save(config)
           for (const id of previousAccountIds) if (!config.accounts.some(item => item.id === id)) authStore.deleteCookie(id)
           if (data.remove_cookie) authStore.deleteCookie(account.id)
-          if (String(data.account_cookie ?? '').trim()) authStore.setCookie(account.id, data.account_cookie)
-          return Result.ok({}, 'ThreadScout 配置已保存；复杂组合规则可继续在 config.yaml 中维护')
+          const saved = String(data.account_cookie ?? '').trim() ? authStore.setCookie(account.id, data.account_cookie) : null
+          return Result.ok({}, `ThreadScout 配置已保存${saved ? `；Cookie 已自动提取并保存 ${saved.count} 个必要字段` : ''}；复杂组合规则可继续在 config.yaml 中维护`)
         } catch (error) {
           return Result.error(`保存失败：${error.message}`)
         }

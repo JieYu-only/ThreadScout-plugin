@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { AuthStore } from '../lib/auth-store.js'
+import { AuthStore, normalizeTiebaCookie } from '../lib/auth-store.js'
 
 test('Cookie 加密保存且状态不泄露内容', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'threadscout-auth-'))
@@ -20,6 +20,17 @@ test('Cookie 加密保存且状态不泄露内容', () => {
 test('拒绝缺少 BDUSS 的凭证', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'threadscout-auth-'))
   try { assert.throws(() => new AuthStore(root).setCookie('main', 'STOKEN=only')) } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('完整浏览器 Cookie 自动提取、去重并移除统计字段', () => {
+  const result = normalizeTiebaCookie('Cookie: Hm_lvt_x=tracking; BDUSS=first; STOKEN=token; BAIDUID=id:FG=1; H_WISE_SIDS=1_2; BDUSS=latest; TIEBAUID=tieba')
+  assert.equal(result.cookie, 'BDUSS=latest; STOKEN=token; BAIDUID=id:FG=1; TIEBAUID=tieba')
+  assert.deepEqual(result.names, ['BDUSS', 'STOKEN', 'BAIDUID', 'TIEBAUID'])
+})
+
+test('兼容聊天复制时被转义的 Cookie 字段名', () => {
+  const result = normalizeTiebaCookie('BDUSS=value; BDUSS\\_BFESS=bfess; BAIDUID\\_BFESS=id')
+  assert.equal(result.cookie, 'BDUSS=value; BDUSS_BFESS=bfess; BAIDUID_BFESS=id')
 })
 
 test('连续两次认证失效后清理加密 Cookie', () => {
