@@ -195,11 +195,18 @@ export class ThreadScout extends BasePlugin {
       const result = await updater.update({ force })
       if (result.status === 'locked') return this.send('已有更新任务正在执行，请稍后再试。')
       if (result.status === 'dirty') return this.send('检测到插件代码存在本地修改，普通更新已停止。\n请先提交修改，或使用 #巡帖强制更新；强制更新会先把差异备份到 data/update-backups。')
-      if (result.status === 'up-to-date') return this.send(`ThreadScout 已是最新版本。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)}\n依赖检查已完成；如刚才更新曾失败，请发送 #重启。`)
+      if (result.status === 'up-to-date') return this.send(`ThreadScout 插件已是最新\n最后更新时间：${result.updatedAt || '未知'}\n当前版本：${result.before.slice(0, 7)}\n依赖检查已完成。`)
       const backup = result.backup ? `\n本地差异备份：${path.relative(root, result.backup)}` : ''
-      const canRestart = typeof globalThis.Bot?.restart === 'function'
-      await this.send(`ThreadScout 更新完成。\n远端：${result.remote}/${result.branch}\n版本：${result.before.slice(0, 7)} → ${result.after.slice(0, 7)}${backup}\n依赖已安装。${canRestart ? '云崽将在 3 秒后自动重启。' : '当前环境不支持自动重启，请发送 #重启。'}`)
-      if (canRestart) setTimeout(() => Promise.resolve(globalThis.Bot.restart()).catch(error => (globalThis.logger ?? console).error('[ThreadScout] 自动重启失败', error)), 3000)
+      await this.send(`ThreadScout 插件更新成功\n最后更新时间：${result.updatedAt || '未知'}\n版本：${result.before.slice(0, 7)} → ${result.after.slice(0, 7)}${backup}`)
+      if (result.logs?.length) await this.send(`ThreadScout 更新日志（${result.logs.length} 条）：\n${result.logs.join('\n')}`)
+      await this.send('依赖检查已完成，2 秒后自动重启生效……')
+      const event = this.e
+      setTimeout(async () => {
+        try {
+          const { Restart } = await import('../../other/restart.js')
+          await new Restart(event).restart()
+        } catch (error) { (globalThis.logger ?? console).error('[ThreadScout] 自动重启失败', error) }
+      }, 2000)
       return true
     } catch (error) {
       ;(globalThis.logger ?? console).error('[ThreadScout] 更新失败', error)
