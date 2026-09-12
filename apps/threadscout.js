@@ -61,6 +61,17 @@ export class ThreadScout extends BasePlugin {
   }
 
   async send(message) { return this.reply?.(message) }
+  generatedAt() { const now = new Date(); const pad = value => String(value).padStart(2, '0'); return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}` }
+  async renderReport(e, data, fallback) {
+    try {
+      if (!e?.runtime?.render) throw new Error('当前运行环境不支持图片渲染')
+      await e.runtime.render('ThreadScout-plugin', 'report', { metricColumns: Math.max(1, Math.min(4, data.metrics?.length ?? 1)), generatedAt: this.generatedAt(), ...data }, { retType: 'default' })
+    } catch (error) {
+      ;(globalThis.logger ?? console).error(`[ThreadScout] ${data.title}卡片渲染失败`, error)
+      await this.send(fallback)
+    }
+    return true
+  }
   helpText() { return '【ThreadScout 指令帮助】\n\n公开指令：\n#巡贴帮助 / #巡帖帮助\n查看本指令说明。\n\n#巡帖状态\n查看运行模式、账号、任务、待回复和今日成功数量。\n\n#巡帖队列\n查看当前待回复任务数量。\n\n主人指令：\n#巡帖记录 [任务标识]\n查看最近扫描命中的帖子、评分和原因。\n\n#巡帖账号\n查看全部账号的启用、绑定和验证状态。\n\n#巡帖添加账号 <标识> <名称>\n#巡帖启用账号 <标识>\n#巡帖停用账号 <标识>\n#巡帖解绑账号 <标识>\n#巡帖删除账号 <标识>\n#巡帖任务账号 <任务标识> <账号标识>\n管理账号与任务绑定；修改操作仅限私聊。\n\n#巡帖扫码登录 [账号标识]\n私聊获取百度登录二维码，扫码确认后加密绑定。\n\n#巡帖立即扫描\n跳过扫描间隔，立即扫描所有已启用任务。\n\n#巡帖重载配置\n校验并重新读取 config.yaml。\n\n#巡帖更新\n安全拉取更新并安装依赖。\n\n#巡帖强制更新\n备份本地代码差异后强制同步远端。\n\n#巡帖模式 观察 / 自动 / 停止\n切换插件运行模式。\n\n提示：贴吧、规则、模板、群号、网络和 Cookie 可在 Guoba-Plugin 的「ThreadScout 巡帖」页面管理。' }
   async help(e = this.e) {
     const current = configStore.value
@@ -123,28 +134,45 @@ export class ThreadScout extends BasePlugin {
       }).filter(Boolean)
       return reasons.join('、') || '无详细原因'
     }
+    const items = rows.map((row, index) => ({
+      title: `${index + 1}. ${row.title}`, badge: `${decisionText[row.decision] ?? row.decision} · ${row.score} 分`,
+      tone: row.decision === 'auto' ? 'ok' : row.decision === 'excluded' ? 'danger' : '',
+      meta: `${row.forum_name}吧${row.task_id ? ` · 任务标识：${row.task_id}` : ''}`,
+      detail: `匹配原因：${reasonText(row)}`, link: `https://tieba.baidu.com/p/${row.thread_id}`
+    }))
     const content = rows.map((row, index) => `${index + 1}. [${decisionText[row.decision] ?? row.decision} / ${row.score} 分] ${row.title}\n贴吧：${row.forum_name}吧${row.task_id ? ` · 任务：${row.task_id}` : ''}\n原因：${reasonText(row)}\nhttps://tieba.baidu.com/p/${row.thread_id}`).join('\n\n')
-    return this.send(`【巡帖记录】${task ? `\n${task.name}（${task.id}）` : ''}\n\n${content}`)
+    return this.renderReport(e, {
+      title: '巡帖扫描记录', subtitle: 'OBSERVATION RECORDS', sectionTitle: task ? task.name : '最近命中记录', sectionCode: 'MATCH RESULTS',
+      metrics: [{ label: '记录数量', value: rows.length }, { label: '自动命中', value: rows.filter(row => row.decision === 'auto').length }, { label: '候选', value: rows.filter(row => row.decision === 'candidate').length }, { label: '已排除', value: rows.filter(row => row.decision === 'excluded').length }],
+      items, notice: '观察模式只保存扫描与评分结果，不会加入回复队列。首次扫描只建立基线，不处理历史帖。', footer: '主题扫描 · 评分原因 · 观察记录'
+    }, `【巡帖记录】${task ? `\n${task.name}（${task.id}）` : ''}\n\n${content}`)
   }
   async scanNow() { const result = await service.scanAll({ force: true }); return this.send(`扫描完成：检查 ${result.scanned ?? 0}，自动命中 ${result.auto ?? 0}，候选 ${result.candidate ?? 0}，入队 ${result.queued ?? 0}${result.errors?.length ? `\n异常：${result.errors.join('；')}` : ''}`) }
   async setMode() { const map = { 观察: 'observe', 自动: 'auto', 停止: 'stopped' }; const mode = map[this.e.msg.match(/观察|自动|停止/)[0]]; const next = structuredClone(configStore.value); next.mode = mode; configStore.save(next); return this.send(`巡帖模式已切换为：${mode}`) }
   async reloadConfig() { try { configStore.reload(); return this.send('ThreadScout 配置已校验并重载。') } catch (error) { return this.send(`配置重载失败，继续使用原配置：${error.message}`) } }
   async accounts() {
     const lines = []
+    const items = []
     for (const account of configStore.value.accounts) {
       const status = authStore.status(account)
       const enabled = account.enabled ? '已启用' : '已停用'
-      if (!status.bound) { lines.push(`${account.name}\n账号标识：${account.id}\n状态：${enabled} / 未绑定\nCookie 来源：未绑定`); continue }
-      if (!account.enabled) { lines.push(`${account.name}\n账号标识：${account.id}\n状态：已停用 / 已绑定\nCookie 来源：${authSourceText(status.source)}`); continue }
+      if (!status.bound) { lines.push(`${account.name}\n账号标识：${account.id}\n状态：${enabled} / 未绑定\nCookie 来源：未绑定`); items.push({ title: account.name, badge: `${enabled} · 未绑定`, tone: 'danger', meta: `账号标识：${account.id}`, detail: 'Cookie 来源：未绑定' }); continue }
+      if (!account.enabled) { lines.push(`${account.name}\n账号标识：${account.id}\n状态：已停用 / 已绑定\nCookie 来源：${authSourceText(status.source)}`); items.push({ title: account.name, badge: '已停用 · 已绑定', meta: `账号标识：${account.id}`, detail: `Cookie 来源：${authSourceText(status.source)}` }); continue }
       try {
         const profile = await adapterFactory(account.id).getAccountProfile({ recordValidation: false })
         lines.push(`${profile.nickname}${profile.uid ? `（UID ${profile.uid}）` : ''}\n配置名称：${account.name}\n账号标识：${account.id}\n状态：${enabled}\nCookie 来源：${authSourceText(status.source)}`)
+        items.push({ title: profile.nickname, badge: '已启用 · 验证成功', tone: 'ok', meta: `配置名称：${account.name} · 账号标识：${account.id}`, detail: `Cookie 来源：${authSourceText(status.source)}${profile.uid ? `\n贴吧 UID：${profile.uid}` : ''}` })
       } catch (error) {
         const cleanup = error.cleared ? '\n已连续两次确认失效，插件保存的旧 Cookie 已自动清理。' : error.source === 'environment' ? '\nCookie 来自环境变量，插件无法自动删除，请修改服务器环境变量。' : ''
         lines.push(`${account.name}\n账号标识：${account.id}\n状态：${enabled} / 已绑定但验证失败\nCookie 来源：${authSourceText(status.source)}\n错误类型：${error.code ?? '未知错误'}\n${error.message}${cleanup}`)
+        items.push({ title: account.name, badge: '已绑定 · 验证失败', tone: 'danger', meta: `账号标识：${account.id} · ${enabled}`, detail: `Cookie 来源：${authSourceText(status.source)}\n错误类型：${error.code ?? '未知错误'}\n${error.message}${cleanup}` })
       }
     }
-    return this.send(`【巡帖账号】\n${lines.join('\n\n')}\nCookie 不会在聊天中显示，请通过锅巴面板绑定。`)
+    return this.renderReport(this.e, {
+      title: '巡帖账号', subtitle: 'ACCOUNT STATUS', sectionTitle: '账号状态', sectionCode: 'ACCOUNTS',
+      metrics: [{ label: '账号总数', value: items.length }, { label: '已启用', value: configStore.value.accounts.filter(item => item.enabled).length }, { label: '已绑定', value: configStore.value.accounts.filter(item => authStore.status(item).bound).length }],
+      items, notice: 'Cookie 不会在聊天或图片中显示，请通过 Guoba-Plugin 的「ThreadScout 巡帖」页面绑定。', footer: '账号状态 · 登录验证 · 加密凭证'
+    }, `【巡帖账号】\n${lines.join('\n\n')}\nCookie 不会在聊天中显示，请通过锅巴面板绑定。`)
   }
   accountManagementText() { return '【巡帖账户管理】\n\n以下修改指令仅限机器人主人私聊使用：\n\n#巡帖添加账号 <账号标识> <显示名称>\n添加一个默认停用、未绑定的新账号。\n\n#巡帖启用账号 <账号标识>\n#巡帖停用账号 <账号标识>\n切换账号启用状态；被启用任务引用的账号不能停用。\n\n#巡帖扫码登录 [账号标识]\n扫码登录并加密保存 Cookie；不填写标识时绑定当前主账号。\n\n#巡帖解绑账号 <账号标识>\n清除该账号由插件加密保存的 Cookie。\n\n#巡帖删除账号 <账号标识>\n删除未被任务引用的账号及其加密 Cookie。\n\n#巡帖任务账号 <任务标识> <账号标识>\n将任务切换到指定的已启用账号。\n\n#巡帖账号\n查看全部账号的启用、绑定和在线验证状态。\n\n账号标识仅支持字母、数字、下划线和短横线。' }
   async accountManagement(e = this.e) {
@@ -247,13 +275,12 @@ export class ThreadScout extends BasePlugin {
     const title = `ThreadScout-plugin更新日志，共${logs.length}条`
     const details = logs.join('\n\n')
     const repository = '更多详细信息，请前往\nhttps://gitee.com/jieyu19960111/thread-scout-plugin 查看'
-    try {
-      const { default: common } = await import('../../../lib/common/common.js')
-      return this.send(await common.makeForwardMsg(this.e, [details, repository], title))
-    } catch (error) {
-      ;(globalThis.logger ?? console).warn('[ThreadScout] 合并转发更新日志失败，改用普通消息', error)
-      return this.send(`${title}\n\n${details}\n\n${repository}`)
-    }
+    return this.renderReport(this.e, {
+      title: 'ThreadScout 更新日志', subtitle: 'UPDATE CHANGELOG', sectionTitle: `本次更新 · 共 ${logs.length} 条`, sectionCode: 'CHANGES',
+      metrics: [{ label: '更新条目', value: logs.length }],
+      items: logs.map((log, index) => ({ title: `${index + 1}. ${log}`, badge: '更新', tone: 'ok' })),
+      notice: '更多详细信息：https://gitee.com/jieyu19960111/thread-scout-plugin', footer: '版本更新 · 中文日志 · 自动重启'
+    }, `${title}\n\n${details}\n\n${repository}`)
   }
   async runUpdate(force) {
     await this.send(force ? '正在执行强制更新操作，请稍等' : '正在执行更新操作，请稍等')

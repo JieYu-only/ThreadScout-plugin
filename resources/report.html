@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{title}}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { width: 720px; background: #071018; color: #e6f0f6; font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif; }
+  #container { position: relative; width: 720px; padding: 28px; overflow: hidden; background: linear-gradient(155deg, #101f2b 0%, #071018 52%, #0a1720 100%); }
+  #container::before { content: ""; position: absolute; width: 520px; height: 520px; right: -220px; top: -250px; border-radius: 50%; border: 1px solid rgba(67,207,169,.18); box-shadow: 0 0 0 54px rgba(67,207,169,.035), 0 0 0 108px rgba(67,207,169,.025); }
+  .content { position: relative; z-index: 1; }
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 24px; border-bottom: 1px solid rgba(150,205,220,.16); }
+  .brand { display: flex; align-items: center; gap: 15px; }
+  .icon { display: grid; place-items: center; width: 58px; height: 58px; border: 2px solid #43cfa9; border-radius: 50%; color: #85f5d2; font-size: 25px; font-weight: 900; box-shadow: 0 0 24px rgba(67,207,169,.2); }
+  h1 { font-size: 27px; letter-spacing: 1px; font-weight: 800; }
+  .subtitle { margin-top: 3px; color: #6f93a4; font: 11px/1.4 Consolas, monospace; letter-spacing: 3px; }
+  .time { color: #7896a5; font: 11px Consolas, monospace; text-align: right; }
+  .time strong { display: block; margin-top: 5px; color: #b7d4df; font-size: 13px; }
+  .metrics { display: grid; grid-template-columns: repeat({{metricColumns}}, 1fr); gap: 10px; margin: 18px 0; }
+  .metric { padding: 13px 14px; border: 1px solid rgba(136,190,207,.14); border-radius: 10px; background: rgba(255,255,255,.035); }
+  .metric label { color: #698899; font-size: 10px; letter-spacing: 1px; }
+  .metric strong { display: block; margin-top: 7px; color: #dcecf2; font-size: 18px; }
+  .section { margin-top: 13px; overflow: hidden; border: 1px solid rgba(136,190,207,.15); border-radius: 12px; background: rgba(255,255,255,.028); }
+  .section-title { display: flex; justify-content: space-between; padding: 11px 15px; background: linear-gradient(90deg, rgba(67,207,169,.1), transparent); border-bottom: 1px solid rgba(136,190,207,.12); }
+  .section-title strong { font-size: 14px; letter-spacing: 1px; }
+  .section-title span { color: #587887; font: 10px Consolas, monospace; letter-spacing: 2px; }
+  .item { padding: 13px 15px; border-bottom: 1px dashed rgba(136,190,207,.1); }
+  .item:last-child { border-bottom: 0; }
+  .item-head { display: flex; justify-content: space-between; gap: 15px; align-items: flex-start; }
+  .item-title { color: #dcecf2; font-size: 14px; font-weight: 700; line-height: 1.5; }
+  .badge { flex: 0 0 auto; padding: 3px 7px; border-radius: 5px; color: #f2c96d; background: rgba(242,201,109,.1); font-size: 10px; }
+  .badge.ok { color: #64dfb7; background: rgba(100,223,183,.1); }
+  .badge.danger { color: #ef7d7d; background: rgba(239,125,125,.1); }
+  .meta { margin-top: 5px; color: #668795; font: 11px/1.5 Consolas, "Microsoft YaHei", sans-serif; }
+  .detail { margin-top: 7px; color: #afc6d0; font-size: 12px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .link { margin-top: 6px; color: #58c7aa; font: 10px/1.4 Consolas, monospace; word-break: break-all; }
+  .notice { margin-top: 13px; padding: 12px 15px; border-left: 3px solid #43cfa9; border-radius: 4px 10px 10px 4px; background: rgba(67,207,169,.07); color: #9eb7c1; font-size: 11px; line-height: 1.7; }
+  .footer { display: flex; justify-content: space-between; margin-top: 18px; padding: 0 4px; color: #486573; font: 10px Consolas, monospace; letter-spacing: 1px; }
+</style>
+</head>
+<body><div id="container"><div class="content">
+  <div class="header"><div class="brand"><div class="icon">TS</div><div><h1>{{title}}</h1><div class="subtitle">{{subtitle}}</div></div></div><div class="time">生成时间<strong>{{generatedAt}}</strong></div></div>
+  {{if metrics && metrics.length}}
+  <div class="metrics">{{each metrics}}<div class="metric"><label>{{$value.label}}</label><strong>{{$value.value}}</strong></div>{{/each}}</div>
+  {{/if}}
+  <div class="section"><div class="section-title"><strong>{{sectionTitle}}</strong><span>{{sectionCode}}</span></div>
+    {{each items}}<div class="item"><div class="item-head"><div class="item-title">{{$value.title}}</div>{{if $value.badge}}<div class="badge {{$value.tone}}">{{$value.badge}}</div>{{/if}}</div>{{if $value.meta}}<div class="meta">{{$value.meta}}</div>{{/if}}{{if $value.detail}}<div class="detail">{{$value.detail}}</div>{{/if}}{{if $value.link}}<div class="link">{{$value.link}}</div>{{/if}}</div>{{/each}}
+  </div>
+  {{if notice}}<div class="notice">{{notice}}</div>{{/if}}
+  <div class="footer"><span>THREADSCOUT-PLUGIN v0.1.0</span><span>{{footer}}</span></div>
+</div></div></body></html>
