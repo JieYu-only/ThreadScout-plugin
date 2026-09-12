@@ -131,6 +131,7 @@ export function supportGuoba() {
           for (const id of previousAccountIds) if (!config.accounts.some(item => item.id === id)) authStore.deleteCookie(id)
           if (data.remove_cookie) authStore.deleteCookie(account.id)
           const saved = String(data.account_cookie ?? '').trim() ? authStore.setCookie(account.id, data.account_cookie) : null
+          ;(globalThis.logger ?? console).mark?.(`[ThreadScout][锅巴配置] 已保存并同步到运行实例${saved ? `；账号 ${account.id} 的 Cookie 已提取 ${saved.count} 个字段并加密保存` : ''}`)
           return Result.ok({}, `ThreadScout 配置已保存${saved ? `；Cookie 已自动提取并保存 ${saved.count} 个必要字段` : ''}；复杂组合规则可继续在 config.yaml 中维护`)
         } catch (error) {
           return Result.error(`保存失败：${error.message}`)
