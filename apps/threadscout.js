@@ -34,6 +34,7 @@ const adapterFactory = accountId => {
 const service = new ThreadScoutService({ configStore, database, adapterFactory, logger: globalThis.logger ?? console })
 const updater = new PluginUpdater({ pluginRoot: root, logger: globalThis.logger ?? console })
 const accountManager = new AccountManager({ configStore, authStore })
+const authSourceText = source => ({ encrypted_file: '锅巴加密保存', environment: '服务器环境变量', none: '未绑定' })[source] ?? '未知来源'
 
 const BasePlugin = globalThis.plugin ?? class {}
 
@@ -44,7 +45,7 @@ export class ThreadScout extends BasePlugin {
       rule: [
         { reg: '^#巡[帖贴]帮助$', fnc: 'help' }, { reg: '^#巡帖状态$', fnc: 'status' }, { reg: '^#巡帖立即扫描$', fnc: 'scanNow', permission: 'master' },
         { reg: '^#巡帖模式\\s*(观察|自动|停止)$', fnc: 'setMode', permission: 'master' }, { reg: '^#巡帖重载配置$', fnc: 'reloadConfig', permission: 'master' },
-        { reg: '^#巡帖队列$', fnc: 'queue' }, { reg: '^#巡帖账号$', fnc: 'accounts', permission: 'master' },
+        { reg: '^#巡帖队列$', fnc: 'queue' }, { reg: '^#巡帖记录(?:\\s+\\S+)?$', fnc: 'records', permission: 'master' }, { reg: '^#巡帖账号$', fnc: 'accounts', permission: 'master' },
         { reg: '^#巡帖(?:账户|账号)管理$', fnc: 'accountManagement', permission: 'master' },
         { reg: '^#巡帖扫码登录(?:\\s+\\S+)?$', fnc: 'qrLogin', permission: 'master' },
         { reg: '^#巡帖添加账号\\s+\\S+\\s+.+$', fnc: 'addAccount', permission: 'master' },
@@ -60,7 +61,7 @@ export class ThreadScout extends BasePlugin {
   }
 
   async send(message) { return this.reply?.(message) }
-  helpText() { return '【ThreadScout 指令帮助】\n\n公开指令：\n#巡贴帮助 / #巡帖帮助\n查看本指令说明。\n\n#巡帖状态\n查看运行模式、账号、任务、待回复和今日成功数量。\n\n#巡帖队列\n查看当前待回复任务数量。\n\n主人指令：\n#巡帖账号\n查看全部账号的启用、绑定和验证状态。\n\n#巡帖添加账号 <标识> <名称>\n#巡帖启用账号 <标识>\n#巡帖停用账号 <标识>\n#巡帖解绑账号 <标识>\n#巡帖删除账号 <标识>\n#巡帖任务账号 <任务标识> <账号标识>\n管理账号与任务绑定；修改操作仅限私聊。\n\n#巡帖扫码登录 [账号标识]\n私聊获取百度登录二维码，扫码确认后加密绑定。\n\n#巡帖立即扫描\n跳过扫描间隔，立即扫描所有已启用任务。\n\n#巡帖重载配置\n校验并重新读取 config.yaml。\n\n#巡帖更新\n安全拉取更新并安装依赖。\n\n#巡帖强制更新\n备份本地代码差异后强制同步远端。\n\n#巡帖模式 观察 / 自动 / 停止\n切换插件运行模式。\n\n提示：贴吧、规则、模板、群号、网络和 Cookie 可在 Guoba-Plugin 的「ThreadScout 巡帖」页面管理。' }
+  helpText() { return '【ThreadScout 指令帮助】\n\n公开指令：\n#巡贴帮助 / #巡帖帮助\n查看本指令说明。\n\n#巡帖状态\n查看运行模式、账号、任务、待回复和今日成功数量。\n\n#巡帖队列\n查看当前待回复任务数量。\n\n主人指令：\n#巡帖记录 [任务标识]\n查看最近扫描命中的帖子、评分和原因。\n\n#巡帖账号\n查看全部账号的启用、绑定和验证状态。\n\n#巡帖添加账号 <标识> <名称>\n#巡帖启用账号 <标识>\n#巡帖停用账号 <标识>\n#巡帖解绑账号 <标识>\n#巡帖删除账号 <标识>\n#巡帖任务账号 <任务标识> <账号标识>\n管理账号与任务绑定；修改操作仅限私聊。\n\n#巡帖扫码登录 [账号标识]\n私聊获取百度登录二维码，扫码确认后加密绑定。\n\n#巡帖立即扫描\n跳过扫描间隔，立即扫描所有已启用任务。\n\n#巡帖重载配置\n校验并重新读取 config.yaml。\n\n#巡帖更新\n安全拉取更新并安装依赖。\n\n#巡帖强制更新\n备份本地代码差异后强制同步远端。\n\n#巡帖模式 观察 / 自动 / 停止\n切换插件运行模式。\n\n提示：贴吧、规则、模板、群号、网络和 Cookie 可在 Guoba-Plugin 的「ThreadScout 巡帖」页面管理。' }
   async help(e = this.e) {
     const current = configStore.value
     const stats = database.stats()
@@ -72,6 +73,7 @@ export class ThreadScout extends BasePlugin {
       { name: '#巡贴帮助', desc: '显示本帮助卡片', access: '公开' },
       { name: '#巡帖状态', desc: '查看模式、账号、任务与今日统计', access: '公开' },
       { name: '#巡帖队列', desc: '查看当前待回复任务数量', access: '公开' },
+      { name: '#巡帖记录', desc: '查看最近命中、评分与匹配原因', access: '主人' },
       { name: '#巡帖账号', desc: '查看账号绑定状态，不显示 Cookie', access: '主人' },
       { name: '#巡帖扫码登录', desc: '私聊扫码登录并加密绑定主账号', access: '主人' },
       { name: '#巡帖账户管理', desc: '添加、启停、解绑、删除及分配任务账号', access: '主人' },
@@ -104,6 +106,26 @@ export class ThreadScout extends BasePlugin {
   }
   async status() { const current = configStore.value; const stats = database.stats(); return this.send(`【ThreadScout】\n模式：${current.mode}\n待回复：${stats.pending}\n今日成功：${stats.todaySuccess}\n账号：${current.accounts.filter(x => x.enabled).length}\n任务：${current.tasks.filter(x => x.enabled).length}`) }
   async queue() { return this.send(`【巡帖队列】\n当前待回复：${database.pendingCount()}`) }
+  async records(e = this.e) {
+    const taskId = String(e?.msg ?? '').trim().split(/\s+/)[1] ?? null
+    const task = taskId ? configStore.value.tasks.find(item => item.id === taskId) : null
+    if (taskId && !task) return this.send(`找不到任务 ${taskId}，请在锅巴对应的贴吧任务区块查看账号与任务配置。`)
+    const rows = database.recentMatches({ taskId, limit: 8 })
+    if (!rows.length) return this.send(`【巡帖记录】\n${task ? `${task.name}（${task.id}）暂无命中记录。` : '暂无自动命中、候选或排除记录。'}\n首次扫描只建立基线，不处理历史帖。`)
+    const decisionText = { auto: '自动命中', candidate: '候选', excluded: '已排除' }
+    const reasonText = row => {
+      if (row.match?.excludedBy) return `排除词“${row.match.excludedBy}”`
+      const reasons = (row.match?.reasons ?? []).map(reason => {
+        if (reason.type === 'keyword') return `${reason.field === 'title' ? '标题' : '正文'}“${reason.text}” ${reason.score >= 0 ? '+' : ''}${reason.score}`
+        if (reason.type === 'negative') return `负向词“${reason.text}” ${reason.score}`
+        if (reason.type === 'combination') return `组合规则 ${reason.id} +${reason.score}`
+        return null
+      }).filter(Boolean)
+      return reasons.join('、') || '无详细原因'
+    }
+    const content = rows.map((row, index) => `${index + 1}. [${decisionText[row.decision] ?? row.decision} / ${row.score} 分] ${row.title}\n贴吧：${row.forum_name}吧${row.task_id ? ` · 任务：${row.task_id}` : ''}\n原因：${reasonText(row)}\nhttps://tieba.baidu.com/p/${row.thread_id}`).join('\n\n')
+    return this.send(`【巡帖记录】${task ? `\n${task.name}（${task.id}）` : ''}\n\n${content}`)
+  }
   async scanNow() { const result = await service.scanAll({ force: true }); return this.send(`扫描完成：检查 ${result.scanned ?? 0}，自动命中 ${result.auto ?? 0}，候选 ${result.candidate ?? 0}，入队 ${result.queued ?? 0}${result.errors?.length ? `\n异常：${result.errors.join('；')}` : ''}`) }
   async setMode() { const map = { 观察: 'observe', 自动: 'auto', 停止: 'stopped' }; const mode = map[this.e.msg.match(/观察|自动|停止/)[0]]; const next = structuredClone(configStore.value); next.mode = mode; configStore.save(next); return this.send(`巡帖模式已切换为：${mode}`) }
   async reloadConfig() { try { configStore.reload(); return this.send('ThreadScout 配置已校验并重载。') } catch (error) { return this.send(`配置重载失败，继续使用原配置：${error.message}`) } }
@@ -112,20 +134,47 @@ export class ThreadScout extends BasePlugin {
     for (const account of configStore.value.accounts) {
       const status = authStore.status(account)
       const enabled = account.enabled ? '已启用' : '已停用'
-      if (!status.bound) { lines.push(`${account.name}（${account.id}）：${enabled} / 未绑定`); continue }
-      if (!account.enabled) { lines.push(`${account.name}（${account.id}）：已停用 / 已绑定 / ${status.source}`); continue }
+      if (!status.bound) { lines.push(`${account.name}\n账号标识：${account.id}\n状态：${enabled} / 未绑定\nCookie 来源：未绑定`); continue }
+      if (!account.enabled) { lines.push(`${account.name}\n账号标识：${account.id}\n状态：已停用 / 已绑定\nCookie 来源：${authSourceText(status.source)}`); continue }
       try {
         const profile = await adapterFactory(account.id).getAccountProfile({ recordValidation: false })
-        lines.push(`${profile.nickname}${profile.uid ? `（UID ${profile.uid}）` : ''}\n配置标识：${account.id} / ${enabled} / ${status.source}`)
+        lines.push(`${profile.nickname}${profile.uid ? `（UID ${profile.uid}）` : ''}\n配置名称：${account.name}\n账号标识：${account.id}\n状态：${enabled}\nCookie 来源：${authSourceText(status.source)}`)
       } catch (error) {
         const cleanup = error.cleared ? '\n已连续两次确认失效，插件保存的旧 Cookie 已自动清理。' : error.source === 'environment' ? '\nCookie 来自环境变量，插件无法自动删除，请修改服务器环境变量。' : ''
-        lines.push(`${account.name}（${account.id}）：${enabled} / 已绑定但验证失败\n${error.code ?? 'ERROR'}：${error.message}${cleanup}`)
+        lines.push(`${account.name}\n账号标识：${account.id}\n状态：${enabled} / 已绑定但验证失败\nCookie 来源：${authSourceText(status.source)}\n错误类型：${error.code ?? '未知错误'}\n${error.message}${cleanup}`)
       }
     }
     return this.send(`【巡帖账号】\n${lines.join('\n\n')}\nCookie 不会在聊天中显示，请通过锅巴面板绑定。`)
   }
-  async accountManagement() {
-    return this.send('【巡帖账户管理】\n\n以下修改指令仅限机器人主人私聊使用：\n\n#巡帖添加账号 <账号标识> <显示名称>\n添加一个默认停用、未绑定的新账号。\n\n#巡帖启用账号 <账号标识>\n#巡帖停用账号 <账号标识>\n切换账号启用状态；被启用任务引用的账号不能停用。\n\n#巡帖扫码登录 [账号标识]\n扫码登录并加密保存 Cookie；不填写标识时绑定当前主账号。\n\n#巡帖解绑账号 <账号标识>\n清除该账号由插件加密保存的 Cookie。\n\n#巡帖删除账号 <账号标识>\n删除未被任务引用的账号及其加密 Cookie。\n\n#巡帖任务账号 <任务标识> <账号标识>\n将任务切换到指定的已启用账号。\n\n#巡帖账号\n查看全部账号的启用、绑定和在线验证状态。\n\n账号标识仅支持字母、数字、下划线和短横线。')
+  accountManagementText() { return '【巡帖账户管理】\n\n以下修改指令仅限机器人主人私聊使用：\n\n#巡帖添加账号 <账号标识> <显示名称>\n添加一个默认停用、未绑定的新账号。\n\n#巡帖启用账号 <账号标识>\n#巡帖停用账号 <账号标识>\n切换账号启用状态；被启用任务引用的账号不能停用。\n\n#巡帖扫码登录 [账号标识]\n扫码登录并加密保存 Cookie；不填写标识时绑定当前主账号。\n\n#巡帖解绑账号 <账号标识>\n清除该账号由插件加密保存的 Cookie。\n\n#巡帖删除账号 <账号标识>\n删除未被任务引用的账号及其加密 Cookie。\n\n#巡帖任务账号 <任务标识> <账号标识>\n将任务切换到指定的已启用账号。\n\n#巡帖账号\n查看全部账号的启用、绑定和在线验证状态。\n\n账号标识仅支持字母、数字、下划线和短横线。' }
+  async accountManagement(e = this.e) {
+    const accounts = configStore.value.accounts.map(account => {
+      const auth = authStore.status(account)
+      return { name: account.name, id: account.id, enabled: account.enabled, bound: auth.bound, source: authSourceText(auth.source) }
+    })
+    const commands = [
+      { name: '#巡帖添加账号', args: '<标识> <名称>', desc: '添加停用且未绑定的新账号' },
+      { name: '#巡帖启用账号', args: '<账号标识>', desc: '启用指定账号' },
+      { name: '#巡帖停用账号', args: '<账号标识>', desc: '停用未被启用任务引用的账号' },
+      { name: '#巡帖扫码登录', args: '[账号标识]', desc: '扫码登录并加密保存 Cookie' },
+      { name: '#巡帖解绑账号', args: '<账号标识>', desc: '清除插件加密保存的 Cookie' },
+      { name: '#巡帖删除账号', args: '<账号标识>', desc: '删除未被任务引用的账号' },
+      { name: '#巡帖任务账号', args: '<任务标识> <账号标识>', desc: '切换任务使用的账号' }
+    ]
+    const now = new Date()
+    const pad = value => String(value).padStart(2, '0')
+    const generatedAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+    try {
+      if (!e?.runtime?.render) throw new Error('当前运行环境不支持图片渲染')
+      await e.runtime.render('ThreadScout-plugin', 'account-management', {
+        accounts, commands, generatedAt, total: accounts.length,
+        enabled: accounts.filter(item => item.enabled).length, bound: accounts.filter(item => item.bound).length
+      }, { retType: 'default' })
+    } catch (error) {
+      ;(globalThis.logger ?? console).error('[ThreadScout] 账户管理卡片渲染失败', error)
+      await this.send(this.accountManagementText())
+    }
+    return true
   }
   async qrLogin(e = this.e) {
     if (e?.isGroup || e?.message_type === 'group') { await this.send('为保护账号安全，请私聊机器人发送 #巡帖扫码登录。'); return true }
@@ -157,7 +206,7 @@ export class ThreadScout extends BasePlugin {
         const adapter = new TiebaAdapter({ cookie, timeoutSeconds: current.network.timeout_seconds, retries: current.network.retries, retryDelaySeconds: current.network.retry_delay_seconds, proxyUrl: current.network.proxy_url })
         const profile = await adapter.getAccountProfile()
         authStore.setCookie(account.id, cookie)
-        await this.send(`扫码登录成功，已加密绑定：${profile.nickname}${profile.uid ? `（UID ${profile.uid}）` : ''}\n配置标识：${account.id}`)
+        await this.send(`扫码登录成功，已加密绑定：${profile.nickname}${profile.uid ? `（UID ${profile.uid}）` : ''}\n配置名称：${account.name}\n账号标识：${account.id}`)
         return true
       }
       throw Object.assign(new Error('等待扫码超时，请重新发送 #巡帖扫码登录'), { code: 'LOGIN_TIMEOUT' })

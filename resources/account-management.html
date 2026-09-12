@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThreadScout 账户管理</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { width: 720px; background: #071018; color: #e6f0f6; font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif; }
+  #container { position: relative; width: 720px; padding: 28px; overflow: hidden; background: linear-gradient(155deg, #101f2b 0%, #071018 52%, #0a1720 100%); }
+  #container::before { content: ""; position: absolute; width: 520px; height: 520px; right: -220px; top: -250px; border-radius: 50%; border: 1px solid rgba(67,207,169,.18); box-shadow: 0 0 0 54px rgba(67,207,169,.035), 0 0 0 108px rgba(67,207,169,.025); }
+  .content { position: relative; z-index: 1; }
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 24px; border-bottom: 1px solid rgba(150,205,220,.16); }
+  .brand { display: flex; align-items: center; gap: 15px; }
+  .icon { display: grid; place-items: center; width: 58px; height: 58px; border: 2px solid #43cfa9; border-radius: 15px; color: #85f5d2; font-size: 30px; box-shadow: 0 0 24px rgba(67,207,169,.2); }
+  h1 { font-size: 27px; letter-spacing: 1px; font-weight: 800; }
+  .subtitle { margin-top: 3px; color: #6f93a4; font: 11px/1.4 Consolas, monospace; letter-spacing: 3px; }
+  .time { color: #7896a5; font: 11px Consolas, monospace; text-align: right; }
+  .time strong { display: block; margin-top: 5px; color: #b7d4df; font-size: 13px; }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+  .metric { padding: 13px 14px; border: 1px solid rgba(136,190,207,.14); border-radius: 10px; background: rgba(255,255,255,.035); }
+  .metric label { color: #698899; font-size: 10px; letter-spacing: 1px; }
+  .metric strong { display: block; margin-top: 7px; color: #dcecf2; font-size: 20px; }
+  .section { margin-top: 13px; overflow: hidden; border: 1px solid rgba(136,190,207,.15); border-radius: 12px; background: rgba(255,255,255,.028); }
+  .section-title { display: flex; justify-content: space-between; padding: 11px 15px; background: linear-gradient(90deg, rgba(67,207,169,.1), transparent); border-bottom: 1px solid rgba(136,190,207,.12); }
+  .section-title strong { font-size: 14px; letter-spacing: 1px; }
+  .section-title span { color: #587887; font: 10px Consolas, monospace; letter-spacing: 2px; }
+  .account { display: grid; grid-template-columns: 1fr 120px 120px; gap: 12px; align-items: center; min-height: 58px; padding: 10px 15px; border-bottom: 1px dashed rgba(136,190,207,.1); }
+  .account:last-child, .command:last-child { border-bottom: 0; }
+  .account-name { color: #e2f0f4; font-size: 14px; font-weight: 700; }
+  .account-id { margin-top: 4px; color: #6f93a4; font: 11px Consolas, monospace; }
+  .state { color: #ef7d7d; font-size: 11px; text-align: center; }
+  .state.ok { color: #64dfb7; }
+  .source { color: #91abb7; font-size: 11px; text-align: right; }
+  .command { display: grid; grid-template-columns: 150px 160px 1fr; gap: 10px; align-items: center; min-height: 49px; padding: 9px 15px; border-bottom: 1px dashed rgba(136,190,207,.1); }
+  .command-name { color: #7ee6c5; font: 700 13px Consolas, "Microsoft YaHei", sans-serif; }
+  .command-args { color: #f0c873; font: 11px Consolas, "Microsoft YaHei", sans-serif; }
+  .command-desc { color: #b9ced7; font-size: 11px; line-height: 1.5; }
+  .notice { margin-top: 13px; padding: 12px 15px; border-left: 3px solid #43cfa9; border-radius: 4px 10px 10px 4px; background: rgba(67,207,169,.07); color: #9eb7c1; font-size: 11px; line-height: 1.7; }
+  .notice strong { color: #79ddbe; }
+  .footer { display: flex; justify-content: space-between; margin-top: 18px; padding: 0 4px; color: #486573; font: 10px Consolas, monospace; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div id="container"><div class="content">
+  <div class="header">
+    <div class="brand"><div class="icon">♙</div><div><h1>巡帖 · 账户管理</h1><div class="subtitle">ACCOUNT MANAGEMENT</div></div></div>
+    <div class="time">GENERATED AT<strong>{{generatedAt}}</strong></div>
+  </div>
+  <div class="metrics">
+    <div class="metric"><label>账号总数</label><strong>{{total}}</strong></div>
+    <div class="metric"><label>已启用</label><strong>{{enabled}}</strong></div>
+    <div class="metric"><label>已绑定</label><strong>{{bound}}</strong></div>
+  </div>
+  <div class="section">
+    <div class="section-title"><strong>账号清单</strong><span>ACCOUNTS</span></div>
+    {{each accounts}}
+    <div class="account">
+      <div><div class="account-name">{{$value.name}}</div><div class="account-id">{{$value.id}}</div></div>
+      <div class="state {{if $value.enabled && $value.bound}}ok{{/if}}">{{if $value.enabled}}已启用{{else}}已停用{{/if}} · {{if $value.bound}}已绑定{{else}}未绑定{{/if}}</div>
+      <div class="source">{{$value.source}}</div>
+    </div>
+    {{/each}}
+  </div>
+  <div class="section">
+    <div class="section-title"><strong>管理指令</strong><span>COMMANDS</span></div>
+    {{each commands}}
+    <div class="command"><div class="command-name">{{$value.name}}</div><div class="command-args">{{$value.args}}</div><div class="command-desc">{{$value.desc}}</div></div>
+    {{/each}}
+  </div>
+  <div class="notice"><strong>安全提示</strong>　账号修改指令仅限机器人主人私聊使用。账号标识仅支持字母、数字、下划线和短横线；Cookie 不会显示在聊天或卡片中。</div>
+  <div class="footer"><span>THREADSCOUT-PLUGIN v0.1.0</span><span>账号配置 · 加密凭证 · 任务分配</span></div>
+</div></div>
+</body>
+</html>

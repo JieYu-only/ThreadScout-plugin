@@ -26,7 +26,7 @@ tasks:
     account_id: main_account
     reply_pool: tarkov_team
     scan:
-      interval_minutes: 10
+      interval_minutes: 180
       latest_threads: 50
       pages: 2
       max_age_minutes: 120
