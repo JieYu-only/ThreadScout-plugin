@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThreadScout 指令帮助</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { width: 720px; background: #071018; color: #e6f0f6; font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif; }
+  #container { position: relative; width: 720px; padding: 28px; overflow: hidden; background: linear-gradient(155deg, #101f2b 0%, #071018 52%, #0a1720 100%); }
+  #container::before { content: ""; position: absolute; width: 520px; height: 520px; right: -220px; top: -250px; border-radius: 50%; border: 1px solid rgba(67, 207, 169, .18); box-shadow: 0 0 0 54px rgba(67, 207, 169, .035), 0 0 0 108px rgba(67, 207, 169, .025); }
+  #container::after { content: ""; position: absolute; left: -160px; bottom: -260px; width: 460px; height: 460px; border-radius: 50%; background: radial-gradient(circle, rgba(44, 139, 178, .13), transparent 68%); }
+  .content { position: relative; z-index: 1; }
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 24px; border-bottom: 1px solid rgba(150, 205, 220, .16); }
+  .brand { display: flex; align-items: center; gap: 15px; }
+  .radar { position: relative; width: 58px; height: 58px; border: 2px solid #43cfa9; border-radius: 50%; box-shadow: 0 0 24px rgba(67, 207, 169, .2); }
+  .radar::before, .radar::after { content: ""; position: absolute; background: rgba(67, 207, 169, .55); }
+  .radar::before { width: 1px; height: 48px; left: 27px; top: 3px; }
+  .radar::after { height: 1px; width: 48px; left: 3px; top: 27px; }
+  .sweep { position: absolute; left: 27px; top: 6px; width: 22px; height: 22px; transform-origin: 0 100%; transform: rotate(32deg); background: linear-gradient(135deg, rgba(67, 207, 169, .65), transparent 72%); }
+  .dot { position: absolute; width: 6px; height: 6px; right: 10px; top: 15px; border-radius: 50%; background: #85f5d2; box-shadow: 0 0 9px #43cfa9; }
+  h1 { font-size: 27px; letter-spacing: 1px; font-weight: 800; }
+  .subtitle { margin-top: 3px; color: #6f93a4; font: 11px/1.4 Consolas, monospace; letter-spacing: 3px; }
+  .time { color: #7896a5; font: 11px Consolas, monospace; text-align: right; }
+  .time strong { display: block; margin-top: 5px; color: #b7d4df; font-size: 13px; }
+  .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+  .metric { padding: 13px 12px; border: 1px solid rgba(136, 190, 207, .14); border-radius: 10px; background: rgba(255,255,255,.035); }
+  .metric-label { color: #698899; font-size: 10px; letter-spacing: 1px; }
+  .metric-value { margin-top: 7px; font-size: 19px; font-weight: 800; color: #dcecf2; }
+  .metric-value.observe { color: #f2c96d; } .metric-value.auto { color: #64dfb7; } .metric-value.stopped { color: #ef7d7d; }
+  .section { margin-top: 13px; overflow: hidden; border: 1px solid rgba(136, 190, 207, .15); border-radius: 12px; background: rgba(255,255,255,.028); }
+  .section-title { display: flex; justify-content: space-between; align-items: center; padding: 11px 15px; background: linear-gradient(90deg, rgba(67,207,169,.1), transparent); border-bottom: 1px solid rgba(136,190,207,.12); }
+  .section-title strong { font-size: 14px; letter-spacing: 1px; }
+  .section-title span { color: #587887; font: 10px Consolas, monospace; letter-spacing: 2px; }
+  .command { display: grid; grid-template-columns: 180px 1fr 42px; gap: 12px; align-items: center; min-height: 49px; padding: 9px 15px; border-bottom: 1px dashed rgba(136,190,207,.1); }
+  .command:last-child { border-bottom: 0; }
+  .command-name { color: #7ee6c5; font: 700 13px Consolas, "Microsoft YaHei", sans-serif; }
+  .command-desc { color: #b9ced7; font-size: 12px; line-height: 1.5; }
+  .badge { padding: 3px 6px; border-radius: 5px; color: #7f9ca9; background: rgba(127,156,169,.1); font-size: 9px; text-align: center; }
+  .badge.master { color: #f0c873; background: rgba(240,200,115,.1); }
+  .mode { display: grid; grid-template-columns: 174px 74px 1fr; gap: 10px; align-items: center; min-height: 51px; padding: 10px 15px; border-bottom: 1px dashed rgba(136,190,207,.1); }
+  .mode:last-child { border-bottom: 0; }
+  .mode-command { color: #d6e7ed; font: 700 12px Consolas, "Microsoft YaHei", sans-serif; }
+  .mode-name { font: 800 10px Consolas, monospace; letter-spacing: 1px; }
+  .mode-name.observe { color: #f2c96d; } .mode-name.auto { color: #64dfb7; } .mode-name.stopped { color: #ef7d7d; }
+  .mode-desc { color: #91abb7; font-size: 11px; }
+  .notice { margin-top: 13px; padding: 12px 15px; border-left: 3px solid #43cfa9; border-radius: 4px 10px 10px 4px; background: rgba(67,207,169,.07); color: #9eb7c1; font-size: 11px; line-height: 1.7; }
+  .notice strong { color: #79ddbe; }
+  .footer { display: flex; justify-content: space-between; margin-top: 18px; padding: 0 4px; color: #486573; font: 10px Consolas, monospace; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div id="container"><div class="content">
+  <div class="header">
+    <div class="brand"><div class="radar"><div class="sweep"></div><div class="dot"></div></div><div><h1>ThreadScout · 巡帖</h1><div class="subtitle">THREAD MONITORING & SAFE REPLY</div></div></div>
+    <div class="time">GENERATED AT<strong>{{generatedAt}}</strong></div>
+  </div>
+  <div class="status-grid">
+    <div class="metric"><div class="metric-label">运行模式</div><div class="metric-value {{modeClass}}">{{mode}}</div></div>
+    <div class="metric"><div class="metric-label">启用任务</div><div class="metric-value">{{tasks}}</div></div>
+    <div class="metric"><div class="metric-label">待回复</div><div class="metric-value">{{pending}}</div></div>
+    <div class="metric"><div class="metric-label">账号状态</div><div class="metric-value" style="font-size:15px;color:{{if accountBound}}#64dfb7{{else}}#ef7d7d{{/if}}">{{accountText}}</div></div>
+  </div>
+  <div class="section">
+    <div class="section-title"><strong>指令一览</strong><span>COMMANDS</span></div>
+    {{each commands}}
+    <div class="command"><div class="command-name">{{$value.name}}</div><div class="command-desc">{{$value.desc}}</div><div class="badge {{if $value.access === '主人'}}master{{/if}}">{{$value.access}}</div></div>
+    {{/each}}
+  </div>
+  <div class="section">
+    <div class="section-title"><strong>运行模式说明</strong><span>OPERATING MODES</span></div>
+    {{each modes}}
+    <div class="mode"><div class="mode-command">{{$value.command}}</div><div class="mode-name {{$value.tone}}">{{$value.name}}</div><div class="mode-desc">{{$value.desc}}</div></div>
+    {{/each}}
+  </div>
+  <div class="notice"><strong>配置提示</strong>　贴吧、匹配规则、回复模板、群号、网络代理与账号 Cookie，可在 Guoba-Plugin 的「ThreadScout 巡帖」页面管理。首次运行请保持观察模式。</div>
+  <div class="footer"><span>THREADSCOUT-PLUGIN v0.1.0</span><span>主题扫描 · 规则评分 · 持久队列</span></div>
+</div></div>
+</body>
+</html>

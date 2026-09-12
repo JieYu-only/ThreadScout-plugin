@@ -8,3 +8,4 @@ config/*.backup.yaml
 .env
 data/auth.key
 data/auth.enc.json
+work/
