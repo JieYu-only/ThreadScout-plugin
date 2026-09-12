@@ -1,17 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { BaiduQrLogin, createLoginSignature, parseJsonp } from '../lib/baidu-qr-login.js'
+import { BaiduQrLogin, parseJsonp } from '../lib/baidu-qr-login.js'
 
 test('parseJsonp accepts JSON and callback wrapped JSON', () => {
   assert.equal(parseJsonp('{"errno":1}').errno, 1)
   assert.equal(parseJsonp('callback({"errno":0,"channel_v":"{}"})').errno, 0)
-})
-
-test('登录确认参数生成稳定的双层 Base64 AES 签名', () => {
-  const signature = createLoginSignature({ alg: 'v3', apiver: 'v3', bduss: 'temporary' })
-  assert.match(signature, /^[A-Za-z0-9+/]+=*$/)
-  assert.equal(signature, createLoginSignature({ alg: 'v3', apiver: 'v3', bduss: 'temporary' }))
-  assert.notEqual(signature, createLoginSignature({ alg: 'v3', apiver: 'v3', bduss: 'changed' }))
 })
 
 test('QR login creates image and maps polling states', async () => {
@@ -35,7 +28,10 @@ test('QR login creates image and maps polling states', async () => {
 test('finish returns captured Cookie only when BDUSS is present', async () => {
   const headers = new Headers()
   headers.append('set-cookie', 'BDUSS=secret; Path=/; HttpOnly')
-  const login = new BaiduQrLogin({ fetchImpl: async () => new Response('', { headers }) })
+  const urls = []
+  const login = new BaiduQrLogin({ fetchImpl: async url => { urls.push(String(url)); return new Response('', { headers }) } })
   const cookie = await login.finish('temporary')
   assert.match(cookie, /BDUSS=secret/)
+  assert.match(urls[0], /tpl=tb/)
+  assert.match(urls[0], /u=https%253A%252F%252Ftieba\.baidu\.com%252Findex\.html/)
 })
